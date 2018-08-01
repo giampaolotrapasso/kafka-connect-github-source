@@ -25,8 +25,10 @@ public class GitHubSourceTask extends SourceTask {
     protected Integer lastIssueNumber;
     protected Integer nextPageToVisit = 1;
     protected Instant lastUpdatedAt;
+    private GithubSourceTaskConfig taskConfig;
 
     GitHubAPIHttpClient gitHubHttpAPIClient;
+
 
     @Override
     public String version() {
@@ -37,13 +39,17 @@ public class GitHubSourceTask extends SourceTask {
     public void start(Map<String, String> map) {
         //Do things here that are required to start your task. This could be open a connection to a database, etc.
         config = new GitHubSourceConnectorConfig(map);
+        taskConfig = new GithubSourceTaskConfig(map);
         initializeLastVariables();
         gitHubHttpAPIClient = new GitHubAPIHttpClient(config);
+        log.info(String.format("Starting task with configuration %s", taskConfig.toString()));
     }
 
     private void initializeLastVariables(){
         Map<String, Object> lastSourceOffset = null;
         lastSourceOffset = context.offsetStorageReader().offset(sourcePartition());
+        log.info("Restoring saved state "+ lastSourceOffset);
+
         if( lastSourceOffset == null){
             // we haven't fetched anything yet, so we initialize to 7 days ago
             nextQuerySince = config.getSince();
@@ -72,7 +78,7 @@ public class GitHubSourceTask extends SourceTask {
 
         // fetch data
         final ArrayList<SourceRecord> records = new ArrayList<>();
-        JSONArray issues = gitHubHttpAPIClient.getNextIssues(nextPageToVisit, nextQuerySince);
+        JSONArray issues = gitHubHttpAPIClient.getNextIssues(taskConfig.getOwner(), taskConfig.getRepository(), nextPageToVisit, nextQuerySince);
         // we'll count how many results we get with i
         int i = 0;
         for (Object obj : issues) {
@@ -82,7 +88,7 @@ public class GitHubSourceTask extends SourceTask {
             i += 1;
             lastUpdatedAt = issue.getUpdatedAt();
         }
-        if (i > 0) log.info(String.format("Fetched %s record(s)", i));
+        if (i > 0) log.info(String.format("Fetched %s record(s) for repository %s/%s going to topic %s", i, taskConfig.getOwner(), taskConfig.getRepository(), taskConfig.getTopic()));
         if (i == 100){
             // we have reached a full batch, we need to get the next one
             nextPageToVisit += 1;
@@ -99,7 +105,7 @@ public class GitHubSourceTask extends SourceTask {
         return new SourceRecord(
                 sourcePartition(),
                 sourceOffset(issue.getUpdatedAt()),
-                config.getTopic(),
+                taskConfig.getTopic(),
                 null, // partition will be inferred by the framework
                 KEY_SCHEMA,
                 buildRecordKey(issue),
@@ -115,8 +121,8 @@ public class GitHubSourceTask extends SourceTask {
 
     private Map<String, String> sourcePartition() {
         Map<String, String> map = new HashMap<>();
-        map.put(OWNER_FIELD, config.getOwnerConfig());
-        map.put(REPOSITORY_FIELD, config.getRepoConfig());
+        map.put(OWNER_FIELD, taskConfig.getOwner());
+        map.put(REPOSITORY_FIELD, taskConfig.getRepository());
         return map;
     }
 
@@ -130,8 +136,8 @@ public class GitHubSourceTask extends SourceTask {
     private Struct buildRecordKey(Issue issue){
         // Key Schema
         Struct key = new Struct(KEY_SCHEMA)
-                .put(OWNER_FIELD, config.getOwnerConfig())
-                .put(REPOSITORY_FIELD, config.getRepoConfig())
+                .put(OWNER_FIELD, taskConfig.getOwner())
+                .put(REPOSITORY_FIELD, taskConfig.getRepository())
                 .put(NUMBER_FIELD, issue.getNumber());
 
         return key;

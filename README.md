@@ -24,19 +24,37 @@ This connector is not perfect and can be improved, please feel free to submit an
 name=GitHubSourceConnectorDemo
 tasks.max=1
 connector.class=com.simplesteph.kafka.GitHubSourceConnector
-topic=github-issues
-github.owner=kubernetes
-github.repo=kubernetes
-since.timestamp=2017-01-01T00:00:00Z
+github.repositories=scala/scala:lang-topic,apache/kafka:kafka-topic,apache/cassandra:cassandra-topic
 # I heavily recommend you set those two fields:
 auth.username=your_username
 auth.password=your_password
 ```
 
+
+## Deprecated parameters
+The following parameters have been deprecated:
+- topic
+- github.owner
+- github.repo
+
+You can still use them but they will be removed in future. 
+
+Using them 
+```
+topic=github-issues
+github.owner=kubernetes
+github.repo=kubernetes
+```
+
+is equivalent to write
+```
+github.repositories=kubernetes/kubernetes:github-issues
+```
+
 # Running in development
 
 Note: Java 8 is required for this connector. 
-Make sure `config/worker.properties` is configured to wherever your kafka cluster is
+Make sure `config/worker.properties` is configured to wherever your Kafka cluster is
 
 ```
 ./build.sh
@@ -48,5 +66,3 @@ The simplest way to run `run.sh` is to have docker installed. It will pull a Doc
 # Deploying
 
 Note: Java 8 is required for this connector. 
-
-TODO
